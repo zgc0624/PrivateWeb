@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-import { ImageIcon, Upload, Download, Lock, Unlock, X, Trash2 } from 'lucide-vue-next'
+import { ref, watch, computed } from 'vue'
+import { ImageIcon, Upload, Download, Lock, Unlock, X, Trash2, AlertTriangle } from 'lucide-vue-next'
 import ToolPageLayout from '@/components/ToolPageLayout.vue'
 
 interface ImageItem {
@@ -10,6 +10,7 @@ interface ImageItem {
   originalSize: number
   originalWidth: number
   originalHeight: number
+  originalType: string
   processedUrl: string
   processedSize: number
   processedWidth: number
@@ -26,12 +27,15 @@ const resizeHeight = ref(600)
 const lockAspect = ref(true)
 const processing = ref(false)
 const isDragging = ref(false)
+const formatAutoSet = ref(false)
 
 const formatOptions = [
   { value: 'image/jpeg', label: 'JPG' },
-  { value: 'image/png', label: 'PNG' },
-  { value: 'image/webp', label: 'WebP' }
+  { value: 'image/png', label: 'PNG（无损）' },
+  { value: 'image/webp', label: 'WebP（推荐）' }
 ]
+
+const qualityDisabled = computed(() => outputFormat.value === 'image/png')
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return bytes + ' B'
@@ -44,6 +48,12 @@ function extFromMime(mime: string): string {
   if (mime === 'image/png') return 'png'
   if (mime === 'image/webp') return 'webp'
   return 'png'
+}
+
+function mimeFromFile(file: File): 'image/jpeg' | 'image/png' | 'image/webp' {
+  if (file.type === 'image/png') return 'image/png'
+  if (file.type === 'image/webp') return 'image/webp'
+  return 'image/jpeg'
 }
 
 function loadImage(file: File): Promise<HTMLImageElement> {
@@ -88,6 +98,11 @@ async function processImage(item: ImageItem): Promise<void> {
   canvas.width = targetW
   canvas.height = targetH
   const ctx = canvas.getContext('2d')!
+
+  if (outputFormat.value === 'image/jpeg') {
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, targetW, targetH)
+  }
   ctx.drawImage(img, 0, 0, targetW, targetH)
 
   const q = outputFormat.value === 'image/png' ? undefined : quality.value / 100
@@ -96,6 +111,7 @@ async function processImage(item: ImageItem): Promise<void> {
   })
 
   if (blob) {
+    if (item.processedUrl) URL.revokeObjectURL(item.processedUrl)
     item.processedUrl = URL.createObjectURL(blob)
     item.processedSize = blob.size
     item.processedWidth = targetW
@@ -118,8 +134,8 @@ async function processAll() {
 }
 
 async function addFiles(files: FileList | File[]) {
-  for (const file of Array.from(files)) {
-    if (!file.type.startsWith('image/')) continue
+  const fileArr = Array.from(files).filter(f => f.type.startsWith('image/'))
+  for (const file of fileArr) {
     const id = Math.random().toString(36).slice(2)
     const item: ImageItem = {
       id,
@@ -128,6 +144,7 @@ async function addFiles(files: FileList | File[]) {
       originalSize: file.size,
       originalWidth: 0,
       originalHeight: 0,
+      originalType: file.type,
       processedUrl: '',
       processedSize: 0,
       processedWidth: 0,
@@ -135,6 +152,11 @@ async function addFiles(files: FileList | File[]) {
       processed: false
     }
     images.value.push(item)
+  }
+  if (!formatAutoSet.value && fileArr.length > 0) {
+    const detected = mimeFromFile(fileArr[0])
+    outputFormat.value = detected
+    formatAutoSet.value = true
   }
 }
 
@@ -157,6 +179,9 @@ function removeImage(id: string) {
     if (images.value[idx].processedUrl) URL.revokeObjectURL(images.value[idx].processedUrl)
     images.value.splice(idx, 1)
   }
+  if (images.value.length === 0) {
+    formatAutoSet.value = false
+  }
 }
 
 function clearAll() {
@@ -165,6 +190,7 @@ function clearAll() {
     if (img.processedUrl) URL.revokeObjectURL(img.processedUrl)
   }
   images.value = []
+  formatAutoSet.value = false
 }
 
 function downloadOne(item: ImageItem) {
@@ -177,9 +203,9 @@ function downloadOne(item: ImageItem) {
 }
 
 function downloadAll() {
-  for (const img of images.value) {
-    if (img.processed) {
-      setTimeout(() => downloadOne(img), 100)
+  for (let i = 0; i < images.value.length; i++) {
+    if (images.value[i].processed) {
+      setTimeout(() => downloadOne(images.value[i]), i * 150)
     }
   }
 }
@@ -200,6 +226,17 @@ function syncRatioFromHeight() {
     const ratio = first.originalWidth / first.originalHeight
     resizeWidth.value = Math.round(resizeHeight.value * ratio)
   }
+}
+
+function sizeChangePercent(original: number, processed: number): { text: string, color: string, icon: string } {
+  const ratio = processed / original
+  const percent = Math.round((ratio - 1) * 100)
+  if (ratio < 1) {
+    return { text: `↓ ${Math.abs(Math.round((1 - ratio) * 100))}%`, color: 'text-emerald-600 dark:text-emerald-400', icon: 'smaller' }
+  } else if (ratio > 1) {
+    return { text: `↑ ${percent}%`, color: 'text-orange-500 dark:text-orange-400', icon: 'larger' }
+  }
+  return { text: '0%', color: 'text-gray-500', icon: 'same' }
 }
 
 watch([quality, outputFormat, resizeEnabled, resizeWidth, resizeHeight, lockAspect], () => {
@@ -250,9 +287,21 @@ watch(() => images.value.length, (n, o) => {
     <div v-else class="space-y-6">
       <div class="card p-5">
         <div class="flex flex-wrap items-end gap-4">
-          <div class="flex-1 min-w-[140px]">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">压缩质量: {{ quality }}%</label>
-            <input type="range" v-model.number="quality" min="10" max="100" step="5" class="w-full accent-rose-500" />
+          <div class="flex-1 min-w-[160px]">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              压缩质量: {{ quality }}%
+              <span v-if="qualityDisabled" class="text-xs text-gray-400 font-normal ml-2">（PNG为无损格式，质量设置无效）</span>
+            </label>
+            <input
+              type="range"
+              v-model.number="quality"
+              min="10"
+              max="100"
+              step="5"
+              class="w-full accent-rose-500"
+              :disabled="qualityDisabled"
+              :class="{ 'opacity-40 cursor-not-allowed': qualityDisabled }"
+            />
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">输出格式</label>
@@ -293,6 +342,11 @@ watch(() => images.value.length, (n, o) => {
             <input ref="fileInput2" type="file" accept="image/*" multiple class="hidden" @change="onFileInput" />
           </div>
         </div>
+        <div v-if="outputFormat === 'image/jpeg' && images.some(i => i.originalType === 'image/png' && i.processedSize > i.originalSize * 1.2)"
+          class="mt-3 flex items-start gap-2 text-sm text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 rounded-lg p-3">
+          <AlertTriangle :size="18" class="flex-shrink-0 mt-0.5" />
+          <span>提示：PNG图片（如截图、二维码）转JPG后体积可能增大。如果想要更小体积，建议选择 <strong>WebP</strong> 格式，或保持 <strong>PNG</strong> 格式。</span>
+        </div>
       </div>
 
       <div v-if="processing" class="text-center py-4 text-gray-500">
@@ -315,9 +369,9 @@ watch(() => images.value.length, (n, o) => {
               </div>
               <div class="flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-500 dark:text-gray-400">
                 <span v-if="img.originalWidth">原始: {{ img.originalWidth }}×{{ img.originalHeight }} · {{ formatSize(img.originalSize) }}</span>
-                <span v-if="img.processed" class="text-emerald-600 dark:text-emerald-400">
+                <span v-if="img.processed" :class="sizeChangePercent(img.originalSize, img.processedSize).color">
                   处理后: {{ img.processedWidth }}×{{ img.processedHeight }} · {{ formatSize(img.processedSize) }}
-                  <span class="ml-1">({{ Math.round((1 - img.processedSize / img.originalSize) * 100) }}% ↓)</span>
+                  <span class="ml-1 font-medium">({{ sizeChangePercent(img.originalSize, img.processedSize).text }})</span>
                 </span>
               </div>
             </div>
