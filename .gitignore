@@ -1,0 +1,22 @@
+node_modules/
+dist/
+.npm-cache/
+.DS_Store
+*.local
+.env
+.env.*
+!.env.example
+
+### IntelliJ IDEA ###
+.idea/
+*.iws
+*.iml
+*.ipr
+
+### VS Code ###
+.vscode/
+
+### Logs ###
+logs/
+*.log
+npm-debug.log*
