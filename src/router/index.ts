@@ -6,6 +6,12 @@ const router = createRouter({
   routes: [
     { path: '/', name: 'home', component: Home },
     {
+      path: '/login',
+      name: 'login',
+      component: () => import('@/pages/Login.vue'),
+      meta: { requiresGuest: true }
+    },
+    {
       path: '/tools/qrcode',
       name: 'qrcode',
       component: () => import('@/pages/tools/QrCode.vue')
