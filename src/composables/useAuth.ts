@@ -20,7 +20,7 @@ export function useAuth() {
 
     // 监听认证状态变化
     // @ts-ignore - v3 SDK 类型定义未更新
-    auth.onAuthStateChanged((user: any) => {
+    auth.onAuthStateChange((user: any) => {
       currentUser.value = user
       loading.value = false
     })
