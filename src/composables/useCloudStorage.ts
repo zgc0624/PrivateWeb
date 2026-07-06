@@ -6,8 +6,7 @@ export interface FileRecord {
   ownerId: string
   fileName: string
   fileSize: number
-  fileURL: string
-  cloudPath: string
+  fileID: string
   createdAt: number
 }
 
@@ -17,8 +16,7 @@ export interface ShareRecord {
   ownerId: string
   fileName: string
   fileSize: number
-  fileURL: string
-  cloudPath: string
+  fileID: string
   accessCode: string
   expiresAt: number
   maxDownloads: number
@@ -38,78 +36,75 @@ export function useCloudStorage() {
     return code
   }
 
-  async function uploadFile(file: File, onProgress?: (percent: number) => void): Promise<FileRecord> {
+  async function uploadFile(file: File): Promise<FileRecord> {
     const cloudPath = `files/${uid.value}/${Date.now()}_${file.name}`
-    const result = await storage.uploadFile({
-      cloudPath,
-      fileContent: file,
-      onUploadProgress: (progressEvent: any) => {
-        if (onProgress && progressEvent.total) {
-          const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total)
-          onProgress(percent)
-        }
-      }
-    })
+    const { data, error } = await storage.upload(cloudPath, file)
 
-    if (result.fileID) {
-      const fileURL = await storage.getTempFileURL({ fileList: [result.fileID] })
-      const url = fileURL.fileList?.[0]?.tempFileURL || ''
+    if (error) throw new Error(error.message || '上传失败')
 
-      const record: FileRecord = {
-        _id: '',
-        ownerId: uid.value,
-        fileName: file.name,
-        fileSize: file.size,
-        fileURL: url,
-        cloudPath: result.fileID,
-        createdAt: Date.now()
-      }
+    const fileID = data.id
 
-      const addResult = await db.collection('files').add(record)
-      if (addResult.id) {
-        record._id = addResult.id
-      }
-      return record
+    const record = {
+      ownerId: uid.value,
+      fileName: file.name,
+      fileSize: file.size,
+      fileID,
+      createdAt: Date.now()
     }
 
-    throw new Error('上传失败')
+    const addResult = await db.collection('files').add(record)
+    return {
+      _id: addResult.id || '',
+      ...record
+    }
   }
 
   async function getUserFiles(): Promise<FileRecord[]> {
-    const result = await db.collection('files')
-      .where({ ownerId: uid.value })
-      .orderBy('createdAt', 'desc')
-      .get()
-    return result.data || []
+    const result = await db.runCommands([{
+      name: 'database.queryDocument',
+      collectionName: 'files',
+      query: { ownerId: uid.value },
+      order: [{ orderBy: 'createdAt', direction: 'desc' }],
+      limit: 100
+    }])
+    const docs = result?.data?.[0]?.data || []
+    return docs.map((d: any) => ({
+      _id: d._id,
+      ownerId: d.ownerId,
+      fileName: d.fileName,
+      fileSize: d.fileSize,
+      fileID: d.fileID,
+      createdAt: d.createdAt
+    }))
   }
 
-  async function deleteFile(fileId: string, cloudPath: string): Promise<void> {
-    await storage.deleteFile({ fileList: [cloudPath] })
+  async function deleteFile(fileId: string, fileID: string): Promise<void> {
+    await storage.remove(fileID)
     await db.collection('files').doc(fileId).remove()
   }
 
-  async function getFileURL(cloudPath: string): Promise<string> {
-    const result = await storage.getTempFileURL({ fileList: [cloudPath] })
-    return result.fileList?.[0]?.tempFileURL || ''
+  async function getDownloadURL(fileID: string): Promise<string> {
+    const { data, error } = await storage.download(fileID)
+    if (error) throw new Error(error.message || '获取下载链接失败')
+    return data.url || ''
   }
 
   async function createShare(fileId: string, expiresDays: number, maxDownloads: number): Promise<ShareRecord> {
-    const files = await db.collection('files').where({ _id: fileId }).get()
-    const file = files.data?.[0]
+    const fileResult = await db.collection('files').doc(fileId).get()
+    const file = fileResult.data
     if (!file) throw new Error('文件不存在')
 
     const shareId = Math.random().toString(36).substring(2, 10)
     const accessCode = generateAccessCode()
     const expiresAt = expiresDays > 0 ? Date.now() + expiresDays * 86400000 : 0
 
-    const record: ShareRecord = {
+    const record = {
       _id: shareId,
       fileId: file._id,
       ownerId: file.ownerId,
       fileName: file.fileName,
       fileSize: file.fileSize,
-      fileURL: file.fileURL,
-      cloudPath: file.cloudPath,
+      fileID: file.fileID,
       accessCode,
       expiresAt,
       maxDownloads,
@@ -117,13 +112,13 @@ export function useCloudStorage() {
       createdAt: Date.now()
     }
 
-    await db.collection('shares').add(record)
+    await db.collection('shares').doc(shareId).create(record)
     return record
   }
 
   async function getShare(shareId: string): Promise<ShareRecord | null> {
-    const result = await db.collection('shares').where({ _id: shareId }).get()
-    return result.data?.[0] || null
+    const result = await db.collection('shares').doc(shareId).get()
+    return result.data || null
   }
 
   async function verifyAndDownload(shareId: string, accessCode: string): Promise<{ url: string, fileName: string } | null> {
@@ -142,7 +137,7 @@ export function useCloudStorage() {
       throw new Error('下载次数已用完')
     }
 
-    const url = await getFileURL(share.cloudPath)
+    const url = await getDownloadURL(share.fileID)
 
     await db.collection('shares').doc(shareId).update({
       downloadCount: db.command.inc(1)
@@ -152,11 +147,27 @@ export function useCloudStorage() {
   }
 
   async function getUserShares(): Promise<ShareRecord[]> {
-    const result = await db.collection('shares')
-      .where({ ownerId: uid.value })
-      .orderBy('createdAt', 'desc')
-      .get()
-    return result.data || []
+    const result = await db.runCommands([{
+      name: 'database.queryDocument',
+      collectionName: 'shares',
+      query: { ownerId: uid.value },
+      order: [{ orderBy: 'createdAt', direction: 'desc' }],
+      limit: 100
+    }])
+    const docs = result?.data?.[0]?.data || []
+    return docs.map((d: any) => ({
+      _id: d._id,
+      fileId: d.fileId,
+      ownerId: d.ownerId,
+      fileName: d.fileName,
+      fileSize: d.fileSize,
+      fileID: d.fileID,
+      accessCode: d.accessCode,
+      expiresAt: d.expiresAt,
+      maxDownloads: d.maxDownloads,
+      downloadCount: d.downloadCount,
+      createdAt: d.createdAt
+    }))
   }
 
   async function deleteShare(shareId: string): Promise<void> {
@@ -180,7 +191,7 @@ export function useCloudStorage() {
     uploadFile,
     getUserFiles,
     deleteFile,
-    getFileURL,
+    getDownloadURL,
     createShare,
     getShare,
     verifyAndDownload,

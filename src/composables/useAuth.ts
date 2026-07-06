@@ -10,13 +10,15 @@ export function useAuth() {
   const uid = computed(() => currentUser.value?.uid ?? '')
 
   onMounted(async () => {
+    // 检查登录状态
     const state = await auth.getLoginState()
     if (state) {
       currentUser.value = state
     }
     loading.value = false
 
-    auth.onAuthStateChanged((user: any) => {
+    // 监听认证状态变化
+    auth.onAuthStateChange((user: any) => {
       currentUser.value = user
       loading.value = false
     })
@@ -31,7 +33,7 @@ export function useAuth() {
   }
 
   async function signIn(email: string, password: string) {
-    const { error } = await auth.signIn({
+    const { error } = await auth.signInWithPassword({
       email,
       password
     })
