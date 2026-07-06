@@ -25,6 +25,19 @@ function resetState() {
   success.value = ''
 }
 
+function handleLeanCloudError(e: any): string {
+  const code = e.code
+  if (code === 202) return '该邮箱已注册，请直接登录'
+  if (code === 211) return '邮箱或密码错误'
+  if (code === 205) return '请先验证邮箱后再登录'
+  if (code === 203) return '邮箱或密码错误'
+  if (code === 200) return '用户名不存在'
+  if (code === 210) return '邮箱已被使用'
+  if (code === 141) return '密码格式不正确'
+  if (e.message) return e.message
+  return '操作失败，请重试'
+}
+
 async function handleSubmit() {
   resetState()
 
@@ -55,18 +68,7 @@ async function handleSubmit() {
       confirmPassword.value = ''
     }
   } catch (e: any) {
-    const msg = e.message || '操作失败，请重试'
-    if (msg.includes('Invalid login credentials')) {
-      error.value = '邮箱或密码错误'
-    } else if (msg.includes('User already registered')) {
-      error.value = '该邮箱已注册'
-    } else if (msg.includes('Weak password')) {
-      error.value = '密码太简单，请换一个'
-    } else if (msg.includes('Email not confirmed')) {
-      error.value = '请先验证邮箱后再登录'
-    } else {
-      error.value = msg
-    }
+    error.value = handleLeanCloudError(e)
   } finally {
     submitting.value = false
   }

@@ -1,65 +1,61 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { supabase } from '@/lib/supabase'
-import type { User, Session } from '@supabase/supabase-js'
+import AV from '@/lib/leancloud'
 
-const user = ref<User | null>(null)
-const session = ref<Session | null>(null)
+const currentUser = ref<AV.User | null>(null)
 const loading = ref(true)
-let unsubscribe: (() => void) | null = null
 
 export function useAuth() {
-  const isAuthenticated = computed(() => !!user.value)
-  const userEmail = computed(() => user.value?.email ?? '')
+  const isAuthenticated = computed(() => !!currentUser.value)
+  const userEmail = computed(() => currentUser.value?.get('email') ?? '')
+  const username = computed(() => currentUser.value?.get('username') ?? '')
 
-  onMounted(async () => {
-    const { data } = await supabase.auth.getSession()
-    session.value = data.session
-    user.value = data.session?.user ?? null
+  onMounted(() => {
+    currentUser.value = AV.User.current()
     loading.value = false
 
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      session.value = newSession
-      user.value = newSession?.user ?? null
+    const onLogin = (user: AV.User) => {
+      currentUser.value = user
       loading.value = false
-    })
-    unsubscribe = authListener.subscription.unsubscribe
-  })
+    }
+    const onLogout = () => {
+      currentUser.value = null
+      loading.value = false
+    }
 
-  onUnmounted(() => {
-    if (unsubscribe) unsubscribe()
+    AV.User.on('login', onLogin)
+    AV.User.on('logout', onLogout)
+
+    onUnmounted(() => {
+      AV.User.off('login', onLogin)
+      AV.User.off('logout', onLogout)
+    })
   })
 
   async function signUp(email: string, password: string) {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password
-    })
-    if (error) throw error
-    return data
+    const user = new AV.User()
+    user.setUsername(email)
+    user.setPassword(password)
+    user.setEmail(email)
+    await user.signUp()
+    return user
   }
 
   async function signIn(email: string, password: string) {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password
-    })
-    if (error) throw error
-    return data
+    const user = await AV.User.logIn(email, password)
+    return user
   }
 
   async function signOut() {
-    const { error } = await supabase.auth.signOut()
-    if (error) throw error
-    user.value = null
-    session.value = null
+    await AV.User.logOut()
+    currentUser.value = null
   }
 
   return {
-    user,
-    session,
+    currentUser,
     loading,
     isAuthenticated,
     userEmail,
+    username,
     signUp,
     signIn,
     signOut
