@@ -9,14 +9,15 @@ if (!envId) {
 
 const app = cloudbase.init({
   env: envId || 'placeholder',
+  // @ts-ignore - v3 SDK accessKey 类型定义未更新
   accessKey: accessKey || ''
 })
 
-// v3 SDK: auth() 返回实例
+// @ts-ignore - v3 SDK auth 返回实例
 export const auth = app.auth()
-// v3 SDK: storage 通过 from() 获取
+// @ts-ignore - v3 SDK storage 类型定义未更新
 export const storage = app.storage.from()
-// v3 SDK: database 通过 runCommands 调用
+// @ts-ignore - v3 SDK database 类型定义未更新
 export const db = app.database()
 
 export default app

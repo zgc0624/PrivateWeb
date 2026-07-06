@@ -60,6 +60,7 @@ export function useCloudStorage() {
   }
 
   async function getUserFiles(): Promise<FileRecord[]> {
+    // @ts-ignore - v3 SDK runCommands 类型定义未更新
     const result = await db.runCommands([{
       name: 'database.queryDocument',
       collectionName: 'files',
@@ -112,6 +113,7 @@ export function useCloudStorage() {
       createdAt: Date.now()
     }
 
+    // @ts-ignore - v3 SDK doc.create 类型定义未更新
     await db.collection('shares').doc(shareId).create(record)
     return record
   }
@@ -147,6 +149,7 @@ export function useCloudStorage() {
   }
 
   async function getUserShares(): Promise<ShareRecord[]> {
+    // @ts-ignore - v3 SDK runCommands 类型定义未更新
     const result = await db.runCommands([{
       name: 'database.queryDocument',
       collectionName: 'shares',

@@ -58,9 +58,7 @@ async function onFileSelect(e: Event) {
 
   try {
     for (const file of Array.from(fileList)) {
-      await uploadFile(file, (percent) => {
-        uploadProgress.value = percent
-      })
+      await uploadFile(file)
     }
     await loadData()
   } catch (e: any) {
@@ -75,7 +73,7 @@ async function onFileSelect(e: Event) {
 async function handleDelete(file: FileRecord) {
   if (!confirm(`确定删除 "${file.fileName}" 吗？`)) return
   try {
-    await deleteFile(file._id, file.cloudPath)
+    await deleteFile(file._id, file.fileID)
     await loadData()
   } catch (e: any) {
     console.error('删除失败:', e)
