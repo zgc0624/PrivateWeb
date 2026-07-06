@@ -6,6 +6,22 @@ const router = createRouter({
   routes: [
     { path: '/', name: 'home', component: Home },
     {
+      path: '/login',
+      name: 'login',
+      component: () => import('@/pages/Login.vue'),
+      meta: { requiresGuest: true }
+    },
+    {
+      path: '/cloud',
+      name: 'cloud',
+      component: () => import('@/pages/CloudDrive.vue')
+    },
+    {
+      path: '/share/:shareId',
+      name: 'share',
+      component: () => import('@/pages/ShareView.vue')
+    },
+    {
       path: '/tools/qrcode',
       name: 'qrcode',
       component: () => import('@/pages/tools/QrCode.vue')

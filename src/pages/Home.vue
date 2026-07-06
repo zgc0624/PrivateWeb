@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { QrCode, ImageIcon, Ruler, CalendarDays, Search, Sparkles, Zap, ShieldCheck } from 'lucide-vue-next'
+import { QrCode, ImageIcon, Ruler, CalendarDays, Search, Sparkles, Zap, ShieldCheck, HardDrive } from 'lucide-vue-next'
 import ToolCard from '@/components/ToolCard.vue'
 
 const searchQuery = ref('')
@@ -37,6 +37,14 @@ const tools = [
     icon: CalendarDays,
     gradient: 'bg-gradient-to-br from-blue-500 to-cyan-500',
     to: '/tools/date-calc'
+  },
+  {
+    id: 'cloud-drive',
+    title: '文件云盘',
+    description: '上传文件到云端，生成带提取码的分享链接，随时随地存取文件',
+    icon: HardDrive,
+    gradient: 'bg-gradient-to-br from-violet-500 to-fuchsia-500',
+    to: '/cloud'
   }
 ]
 
@@ -55,7 +63,7 @@ const filteredTools = computed(() => {
       <div class="max-w-4xl mx-auto text-center">
         <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-300 text-sm font-medium mb-6 opacity-0-init animate-fade-in-up">
           <Sparkles :size="16" />
-          <span>所有工具免费使用，无需注册</span>
+          <span>所有工具免费使用，开箱即用</span>
         </div>
 
         <h1 class="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight mb-6 opacity-0-init animate-fade-in-up animate-delay-100">
@@ -64,7 +72,7 @@ const filteredTools = computed(() => {
         </h1>
 
         <p class="text-lg sm:text-xl text-gray-500 dark:text-gray-400 max-w-2xl mx-auto mb-10 leading-relaxed opacity-0-init animate-fade-in-up animate-delay-200">
-          一个简洁美观的在线工具箱，包含二维码生成、图片处理、单位换算、日期计算等实用工具。所有功能在浏览器本地运行，数据不会上传到任何服务器。
+          一个简洁美观的在线工具箱，包含二维码生成、图片处理、单位换算、日期计算等实用工具，以及文件云盘功能。工具类功能在浏览器本地运行，云盘文件安全存储在云端。
         </p>
 
         <div class="relative max-w-xl mx-auto mb-10 opacity-0-init animate-fade-in-up animate-delay-300">
@@ -96,7 +104,7 @@ const filteredTools = computed(() => {
 
     <section class="px-4 pb-20">
       <div class="max-w-6xl mx-auto">
-        <div v-if="filteredTools.length > 0" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div v-if="filteredTools.length > 0" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           <ToolCard
             v-for="(tool, index) in filteredTools"
             :key="tool.id"
